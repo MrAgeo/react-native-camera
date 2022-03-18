@@ -39,7 +39,11 @@ import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.media.MediaActionSound;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+
 import android.util.Log;
+import android.util.Range;
+import android.util.Rational;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.os.Handler;
@@ -62,9 +66,9 @@ import java.util.SortedSet;
 import org.reactnative.camera.utils.ObjectUtils;
 
 
-
 @SuppressWarnings("MissingPermission")
-@TargetApi(21)
+@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+@RequiresApi( api = Build.VERSION_CODES.LOLLIPOP)
 class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, MediaRecorder.OnErrorListener {
 
     private static final String TAG = "Camera2";
@@ -131,6 +135,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             mCaptureSession = session;
             mInitialCropRegion = mPreviewRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION);
             updateAutoFocus();
+            updateAutoExposure();
+            updateExposureTime();
+            updateExposureCompensation();
             updateFlash();
             updateFocusDepth();
             updateWhiteBalance();
@@ -247,10 +254,15 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     private AspectRatio mInitialRatio;
 
     private boolean mAutoFocus;
+    private boolean mAutoFocusPrevious;
 
     private int mFlash;
 
     private float mExposure;
+
+    private long mExposureTime;
+
+    private boolean mAutoExposure;
 
     private int mCameraOrientation;
 
@@ -556,16 +568,191 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     @Override
     void setExposureCompensation(float exposure) {
-        Log.e("CAMERA_2:: ", "Adjusting exposure is not currently supported for Camera2");
+        //Log.e("CAMERA_2:: ", "Adjusting exposure is not currently supported for Camera2");
+        if (mExposure == exposure) {
+            return;
+        }
+        float saved = mExposure;
+        mExposure = exposure;
+        if (mCaptureSession != null) {
+            updateExposureCompensation();
+            try {
+                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
+                        mCaptureCallback, null);
+            } catch (CameraAccessException e) {
+                mExposure = saved;  // Revert
+            }
+        }
     }
 
+    @Override
+    void setAutoExposure(boolean autoExposure) {
+        if (mAutoExposure == autoExposure) {
+            return;
+        }
+        mAutoExposure = autoExposure;
+        if (mPreviewRequestBuilder != null) {
+            updateAutoExposure();
+            if (mCaptureSession != null) {
+                try {
+                    mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
+                            mCaptureCallback, null);
+                } catch (CameraAccessException e) {
+                    mAutoExposure = !mAutoExposure; // Revert
+                }
+            }
+        }
+    }
 
+    @Override
+    boolean getAutoExposure() {
+        return mAutoExposure;
+    }
+
+    void updateExposureCompensation(){
+
+        if (mAutoExposure) {
+            return;
+        }
+        Rational step = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+        Range<Integer> range = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+
+
+        if (step == null) {
+            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_STEP null");
+        }
+
+        if (range == null){
+            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_RANGE null");
+        }
+
+        int minRange = range.getLower();
+        int maxRange = range.getUpper();
+
+        // Check if exposure compensation is supported
+        if ( minRange != 0 || maxRange != 0) {
+            float steps = (maxRange - minRange)/step.floatValue();
+            int value = (int) (mExposure * steps);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value);
+        }
+    }
+
+    private void lockExposure(){
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        try {
+            mCaptureCallback.setState(PictureCaptureCallback.STATE_LOCKING);
+            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, null);
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Failed to lock exposure compensation.", e);
+        }
+    }
+
+    /**
+     * Unlocks the auto-exposure and restart camera preview. This is supposed to be called after
+     * capturing a still picture.
+     */
+    void unlockExposure() {
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
+        try {
+            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, null);
+            updateAutoExposure();
+            updateFlash();
+            if (mIsScanning) {
+                mImageFormat = ImageFormat.YUV_420_888;
+                startCaptureSession();
+            } else {
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                        CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
+                        null);
+                mCaptureCallback.setState(PictureCaptureCallback.STATE_PREVIEW);
+            }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Failed to restart camera preview.", e);
+        }
+    }
+
+    /**
+     * Updates the internal state of auto-exposure to {@link #mAutoExposure}.
+     */
+    void updateAutoExposure() {
+        if (mAutoExposure) {
+            int[] modes = mCameraCharacteristics.get(
+                    CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
+            // Auto exposure is not supported
+            if (modes == null || modes.length == 0 ||
+                    (modes.length == 1 && modes[0] == CameraCharacteristics.CONTROL_AE_MODE_ON)) {
+                mAutoExposure = false;
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_OFF);
+            } else {
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON);
+            }
+            // If auto-exposure is set, deactivate auto-focus and save its state
+            mAutoFocusPrevious = mAutoFocus;
+            setAutoFocus(false);
+        } else {
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                    CaptureRequest.CONTROL_AE_MODE_OFF);
+            setAutoFocus(mAutoFocusPrevious);
+        }
+    }
+
+    @Override
+    void setExposureTime(long exposureTime){
+        if(mExposureTime == exposureTime){
+            return;
+        }
+        long saved = mExposureTime;
+        mExposureTime = exposureTime;
+
+        if (mCaptureSession != null) {
+            updateExposureTime();
+
+            try {
+                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
+                        mCaptureCallback, null);
+
+            } catch (CameraAccessException e) {
+                mExposureTime = saved;
+            }
+        }
+    }
+
+    @Override
+    long getExposureTime() {return mExposureTime;}
+
+    void updateExposureTime(){
+        if (mAutoExposure){
+            return;
+        }
+        Range<Long> timeRange = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+        if (timeRange == null){
+            throw new NullPointerException("Unexpected state: SENSOR_INFO_EXPOSURE_TIME_RANGE null");
+        }
+        long minTime = timeRange.getLower();
+        long maxTime = timeRange.getUpper();
+        if (mExposureTime > maxTime){
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, maxTime);
+        } else if (mExposureTime < minTime ){
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, minTime);
+        } else {
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, mExposureTime);
+        }
+    }
+
+    // TODO: Confirm PNG output
     @Override
     void takePicture(ReadableMap options) {
         mCaptureCallback.setOptions(options);
 
         if (mAutoFocus) {
             lockFocus();
+        } else if (mAutoExposure) {
+            lockExposure();
         } else {
             captureStillPicture();
         }
@@ -978,6 +1165,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     @Override
     public void resumePreview() {
         unlockFocus();
+        unlockExposure();
     }
 
     @Override
@@ -1165,29 +1353,41 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      */
     void updateWhiteBalance() {
         switch (mWhiteBalance) {
+            case Constants.WB_OFF:
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
+                    CaptureRequest.CONTROL_AWB_MODE_OFF);
+                break;
             case Constants.WB_AUTO:
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
                     CaptureRequest.CONTROL_AWB_MODE_AUTO);
-                break;
-            case Constants.WB_CLOUDY:
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
-                    CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
-                break;
-            case Constants.WB_FLUORESCENT:
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
-                    CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
                 break;
             case Constants.WB_INCANDESCENT:
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
                     CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT);
                 break;
-            case Constants.WB_SHADOW:
+            case Constants.WB_FLUORESCENT:
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
-                    CaptureRequest.CONTROL_AWB_MODE_SHADE);
+                        CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
+                break;
+            case Constants.WB_WARM_FLUORESCENT:
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_WARM_FLUORESCENT);
                 break;
             case Constants.WB_SUNNY:
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
                     CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT);
+                break;
+            case Constants.WB_CLOUDY:
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
+                    CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
+                break;
+            case Constants.WB_NIGHT:
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
+                    CaptureRequest.CONTROL_AWB_MODE_TWILIGHT);
+                break;
+            case Constants.WB_SHADOW:
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,
+                    CaptureRequest.CONTROL_AWB_MODE_SHADE);
                 break;
         }
     }
@@ -1349,6 +1549,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                             if (mCaptureCallback.getOptions().hasKey("pauseAfterCapture")
                               && !mCaptureCallback.getOptions().getBoolean("pauseAfterCapture")) {
                                 unlockFocus();
+                                unlockExposure();
                             }
                             if (mPlaySoundOnCapture) {
                                 sound.play(MediaActionSound.SHUTTER_CLICK);

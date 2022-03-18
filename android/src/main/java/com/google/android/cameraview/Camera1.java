@@ -25,6 +25,8 @@ import android.media.MediaRecorder;
 import android.media.MediaActionSound;
 import android.os.Build;
 import android.os.Handler;
+
+import androidx.annotation.RequiresApi;
 import androidx.collection.SparseArrayCompat;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -45,6 +47,7 @@ import org.reactnative.camera.utils.ObjectUtils;
 
 
 @SuppressWarnings("deprecation")
+@RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
 class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
                                                 MediaRecorder.OnErrorListener, Camera.PreviewCallback {
 
@@ -117,6 +120,8 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
     private int mFlash;
 
     private float mExposure;
+
+    private boolean mAutoExposure;
 
     private int mDisplayOrientation;
 
@@ -337,6 +342,9 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
             try {
                 mIsPreviewActive = true;
                 mCamera.startPreview();
+                if (mCameraParameters.isAutoExposureLockSupported()){
+                    setAutoExposure(true);
+                }
                 if (mIsScanning) {
                     mCamera.setPreviewCallback(this);
                 }
@@ -610,6 +618,40 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
     }
 
     @Override
+    void setExposureTime(long exposureTime) {
+        // Not supported in Camera1
+    }
+
+    @Override
+    long getExposureTime() {
+        return 0;
+    }
+
+    @Override
+    void setAutoExposure(boolean autoExposure) {
+        if (mAutoExposure == autoExposure){
+            return;
+        }
+
+        synchronized (this){
+            if (setAutoExposureInternal(autoExposure)) {
+                try{
+                    if (mCamera != null){
+                        mCamera.setParameters(mCameraParameters);
+                    }
+                } catch (RuntimeException e){
+                    Log.e("CAMERA_1::", "setParameters failed", e);
+                }
+            }
+        }
+    }
+
+    @Override
+    boolean getAutoExposure() {
+        return mAutoExposure;
+    }
+
+    @Override
     void setExposureCompensation(float exposure) {
 
         if (exposure == mExposure) {
@@ -804,6 +846,9 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
                                 if (options.hasKey("pauseAfterCapture") && !options.getBoolean("pauseAfterCapture")) {
                                     try {
                                         mCamera.startPreview();
+                                        if (mCameraParameters.isAutoExposureLockSupported()){
+                                            setAutoExposure(true);
+                                        }
                                         mIsPreviewActive = true;
                                         if (mIsScanning) {
                                             mCamera.setPreviewCallback(Camera1.this);
@@ -1477,6 +1522,16 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
         return false;
     }
 
+    private boolean setAutoExposureInternal(boolean autoExposure){
+        mAutoExposure = autoExposure;
+
+        if (isCameraOpened() && mCameraParameters.isAutoExposureLockSupported()){
+            mCameraParameters.setAutoExposureLock(autoExposure);
+            return true;
+        }else{
+            return false;
+        }
+    }
 
     /**
      * @return {@code true} if {@link #mCameraParameters} was modified.
@@ -1527,6 +1582,7 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
             }
         }
     }
+
 
     private void setPlaySoundInternal(boolean playSoundOnCapture){
         mPlaySoundOnCapture = playSoundOnCapture;

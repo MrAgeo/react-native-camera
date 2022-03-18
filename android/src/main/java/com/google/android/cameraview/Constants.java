@@ -32,12 +32,15 @@ public interface Constants {
     int LANDSCAPE_90 = 90;
     int LANDSCAPE_270 = 270;
 
-    int WB_AUTO = 0;
-    int WB_CLOUDY = 1;
-    int WB_SUNNY = 2;
-    int WB_SHADOW = 3;
-    int WB_FLUORESCENT = 4;
-    int WB_INCANDESCENT = 5;
+    int WB_OFF = 0;
+    int WB_AUTO = 1;
+    int WB_INCANDESCENT = 2;
+    int WB_FLUORESCENT = 3;
+    int WB_WARM_FLUORESCENT = 4;
+    int WB_SUNNY = 5;
+    int WB_CLOUDY = 6;
+    int WB_NIGHT = 7;
+    int WB_SHADOW = 8;
 
     int ORIENTATION_AUTO = 0;
     int ORIENTATION_UP = 1;

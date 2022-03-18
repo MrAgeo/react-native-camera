@@ -582,6 +582,7 @@ public class RCTCameraModule extends ReactContextBaseJavaModule
         }
     }
 
+    // TODO: Change to PNG format
     /**
      * synchronized in order to prevent the user crashing the app by taking many photos and them all being processed
      * concurrently which would blow the memory (esp on smaller devices), and slow things down.

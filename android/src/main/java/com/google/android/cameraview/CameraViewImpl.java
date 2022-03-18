@@ -98,6 +98,14 @@ abstract class CameraViewImpl {
 
     abstract float getExposureCompensation();
 
+    abstract void setExposureTime(long exposureTime);
+
+    abstract long getExposureTime();
+
+    abstract void setAutoExposure(boolean autoExposure);
+
+    abstract boolean getAutoExposure();
+
     abstract void takePicture(ReadableMap options);
 
     abstract boolean record(String path, int maxDuration, int maxFileSize,
