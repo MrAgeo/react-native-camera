@@ -525,6 +525,27 @@ public class CameraView extends FrameLayout {
     }
 
     /**
+     * Enables or disables the continuous auto-focus mode. When the current camera doesn't support
+     * auto-exposure, calling this method will be ignored.
+     *
+     * @param autoExposure {@code true} to enable continuous auto-exposure mode. {@code false} to
+     *                  disable it.
+     */
+    public void setAutoExposure(boolean autoExposure) {
+        mImpl.setAutoExposure(autoExposure);
+    }
+
+    /**
+     * Returns whether the continuous auto-exposure mode is enabled.
+     *
+     * @return {@code true} if the continuous auto-exposure mode is enabled. {@code false} if it is
+     * disabled, or if it is not supported by the current camera.
+     */
+    public boolean getAutoExposure() {
+        return mImpl.getAutoExposure();
+    }
+
+    /**
      * Sets the flash mode.
      *
      * @param flash The desired flash mode.
@@ -554,6 +575,14 @@ public class CameraView extends FrameLayout {
 
     public float getExposureCompensation() {
         return mImpl.getExposureCompensation();
+    }
+
+    public void setExposureTime(long exposureTime) {
+        mImpl.setExposureTime(exposureTime);
+    }
+
+    public float getExposureTime() {
+        return mImpl.getExposureTime();
     }
 
 
