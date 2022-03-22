@@ -17,6 +17,7 @@
 package com.google.android.cameraview;
 
 import android.app.Activity;
+
 import android.content.Context;
 import android.graphics.Rect;
 import android.hardware.Camera;
@@ -525,7 +526,7 @@ public class CameraView extends FrameLayout {
     }
 
     /**
-     * Enables or disables the continuous auto-focus mode. When the current camera doesn't support
+     * Enables or disables the continuous auto-exposure mode. When the current camera doesn't support
      * auto-exposure, calling this method will be ignored.
      *
      * @param autoExposure {@code true} to enable continuous auto-exposure mode. {@code false} to

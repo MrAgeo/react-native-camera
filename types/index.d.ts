@@ -23,6 +23,7 @@ type Orientation = Readonly<{
 }>;
 type OrientationNumber = 1 | 2 | 3 | 4;
 type AutoFocus = Readonly<{ on: any; off: any }>;
+type AutoExposure = Readonly<{ on: any; off: any }>;
 type VideoStabilization = Readonly<{ off: any; standard: any; cinematic: any; auto: any }>;
 type FlashMode = Readonly<{ on: any; off: any; torch: any; auto: any }>;
 type CameraType = Readonly<{ front: any; back: any }>;
@@ -32,7 +33,10 @@ type WhiteBalance = Readonly<{
   shadow: any;
   incandescent: any;
   fluorescent: any;
-  auto: any;
+  warmFluorescent: any;
+  night: any,
+  auto: any,
+  off: any;
 }>;
 type CustomWhiteBalance = {
   temperature: number;
@@ -118,6 +122,7 @@ type FaCC = (
 export interface Constants {
   CameraStatus: CameraStatus;
   AutoFocus: AutoFocus;
+  AutoExposure: AutoExposure;
   FlashMode: FlashMode;
   VideoCodec: VideoCodec;
   Type: CameraType;
