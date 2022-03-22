@@ -17,7 +17,6 @@
 package com.google.android.cameraview;
 
 import android.app.Activity;
-
 import android.content.Context;
 import android.graphics.Rect;
 import android.hardware.Camera;
