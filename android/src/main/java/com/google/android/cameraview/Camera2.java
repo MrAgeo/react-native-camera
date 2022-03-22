@@ -134,10 +134,10 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             }
             mCaptureSession = session;
             mInitialCropRegion = mPreviewRequestBuilder.get(CaptureRequest.SCALER_CROP_REGION);
-            updateAutoFocus();
             updateAutoExposure();
             updateExposureTime();
             updateExposureCompensation();
+            updateAutoFocus();
             updateFlash();
             updateFocusDepth();
             updateWhiteBalance();
@@ -631,8 +631,13 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
         // Check if exposure compensation is supported
         if ( minRange != 0 || maxRange != 0) {
+
+            // Get total steps from minRange to maxRange
             float steps = (maxRange - minRange)/step.floatValue();
+
+            // Map 0-1 to step count
             int value = (int) (mExposure * steps);
+            
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value);
         }
     }
@@ -683,7 +688,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                     CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
             // Auto exposure is not supported
             if (modes == null || modes.length == 0 ||
-                    (modes.length == 1 && modes[0] == CameraCharacteristics.CONTROL_AE_MODE_ON)) {
+                    (modes.length == 1 && modes[0] == CameraCharacteristics.CONTROL_AE_MODE_OFF)) {
                 mAutoExposure = false;
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                         CaptureRequest.CONTROL_AE_MODE_OFF);
@@ -695,7 +700,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             mAutoFocusPrevious = mAutoFocus;
             setAutoFocus(false);
         } else {
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                     CaptureRequest.CONTROL_AE_MODE_OFF);
             setAutoFocus(mAutoFocusPrevious);
         }

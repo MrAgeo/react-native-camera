@@ -17,6 +17,8 @@
 package com.google.android.cameraview;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+
 import android.content.Context;
 import android.graphics.Rect;
 import android.hardware.Camera;
@@ -525,7 +527,7 @@ public class CameraView extends FrameLayout {
     }
 
     /**
-     * Enables or disables the continuous auto-focus mode. When the current camera doesn't support
+     * Enables or disables the continuous auto-exposure mode. When the current camera doesn't support
      * auto-exposure, calling this method will be ignored.
      *
      * @param autoExposure {@code true} to enable continuous auto-exposure mode. {@code false} to
@@ -533,6 +535,10 @@ public class CameraView extends FrameLayout {
      */
     public void setAutoExposure(boolean autoExposure) {
         mImpl.setAutoExposure(autoExposure);
+        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+        builder.setTitle("Auto Exposure");
+        builder.setMessage(Boolean.toString(autoExposure));
+        builder.show();
     }
 
     /**
@@ -571,6 +577,10 @@ public class CameraView extends FrameLayout {
 
     public void setExposureCompensation(float exposure) {
         mImpl.setExposureCompensation(exposure);
+        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+        builder.setTitle("Exposure Compensation");
+        builder.setMessage(Float.toString(exposure));
+        builder.show();
     }
 
     public float getExposureCompensation() {
@@ -579,6 +589,10 @@ public class CameraView extends FrameLayout {
 
     public void setExposureTime(long exposureTime) {
         mImpl.setExposureTime(exposureTime);
+        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+        builder.setTitle("Exposure Time");
+        builder.setMessage(Float.toString((float) exposureTime/1E9f));
+        builder.show();
     }
 
     public float getExposureTime() {

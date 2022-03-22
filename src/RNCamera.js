@@ -1,6 +1,6 @@
 // @flow
 import React from 'react';
-import PropTypes from 'prop-types';
+import PropTypes, { number } from 'prop-types';
 import {
   findNodeHandle,
   Platform,
@@ -269,6 +269,8 @@ type PropsType = typeof View.props & {
   trackingEnabled?: boolean,
   flashMode?: number | string,
   exposure?: number,
+  exposureTime?: number,
+  autoExposure?: boolean,
   barCodeTypes?: Array<string>,
   googleVisionBarcodeType?: number,
   googleVisionBarcodeMode?: number,
@@ -322,6 +324,9 @@ const CameraManager: Object = NativeModules.RNCameraManager ||
     AutoFocus: {
       on: 1,
     },
+    AutoExposure: {
+      on: 1,
+    },
     FlashMode: {
       off: 1,
     },
@@ -358,6 +363,7 @@ export default class Camera extends React.Component<PropsType, StateType> {
     Type: CameraManager.Type,
     FlashMode: CameraManager.FlashMode,
     AutoFocus: CameraManager.AutoFocus,
+    AutoExposure: CameraManager.AutoExposure,
     WhiteBalance: CameraManager.WhiteBalance,
     VideoQuality: CameraManager.VideoQuality,
     ImageType: CameraManager.ImageType,
@@ -383,6 +389,7 @@ export default class Camera extends React.Component<PropsType, StateType> {
     type: CameraManager.Type,
     flashMode: CameraManager.FlashMode,
     exposure: CameraManager.Exposure,
+    autoExposure: CameraManager.AutoExposure,
     autoFocus: CameraManager.AutoFocus,
     whiteBalance: CameraManager.WhiteBalance,
     faceDetectionMode: (CameraManager.FaceDetection || {}).Mode,
@@ -427,6 +434,8 @@ export default class Camera extends React.Component<PropsType, StateType> {
     cameraId: PropTypes.string,
     flashMode: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     exposure: PropTypes.number,
+    exposureTime: PropTypes.number,
+    autoExposure: PropTypes.bool,
     whiteBalance: PropTypes.oneOfType([PropTypes.string, PropTypes.number,
       PropTypes.shape({ temperature: PropTypes.number, tint: PropTypes.number,
         redGainOffset: PropTypes.number,
@@ -463,6 +472,8 @@ export default class Camera extends React.Component<PropsType, StateType> {
     autoFocus: CameraManager.AutoFocus.on,
     flashMode: CameraManager.FlashMode.off,
     exposure: -1,
+    autoExposure: true,
+    exposureTime: 0,
     whiteBalance: CameraManager.WhiteBalance.auto,
     faceDetectionMode: (CameraManager.FaceDetection || {}).fast,
     barCodeTypes: Object.values(CameraManager.BarCodeType),
