@@ -253,6 +253,8 @@ public class CameraView extends FrameLayout {
         state.autoFocus = getAutoFocus();
         state.flash = getFlash();
         state.exposure = getExposureCompensation();
+        state.exposureTime = getExposureTime();
+        state.autoExposure = getAutoExposure();
         state.focusDepth = getFocusDepth();
         state.zoom = getZoom();
         state.whiteBalance = getWhiteBalance();
@@ -277,6 +279,8 @@ public class CameraView extends FrameLayout {
         setAutoFocus(ss.autoFocus);
         setFlash(ss.flash);
         setExposureCompensation(ss.exposure);
+        setExposureTime(ss.exposureTime);
+        setAutoExposure(ss.autoExposure);
         setFocusDepth(ss.focusDepth);
         setZoom(ss.zoom);
         setWhiteBalance(ss.whiteBalance);
@@ -581,7 +585,7 @@ public class CameraView extends FrameLayout {
         mImpl.setExposureTime(exposureTime);
     }
 
-    public float getExposureTime() {
+    public long getExposureTime() {
         return mImpl.getExposureTime();
     }
 
@@ -796,6 +800,10 @@ public class CameraView extends FrameLayout {
 
         float exposure;
 
+        long exposureTime;
+
+        boolean autoExposure;
+
         float focusDepth;
 
         float zoom;
@@ -819,6 +827,8 @@ public class CameraView extends FrameLayout {
             autoFocus = source.readByte() != 0;
             flash = source.readInt();
             exposure = source.readFloat();
+            exposureTime = source.readLong();
+            autoExposure = source.readByte() != 0;
             focusDepth = source.readFloat();
             zoom = source.readFloat();
             whiteBalance = source.readInt();
@@ -841,6 +851,8 @@ public class CameraView extends FrameLayout {
             out.writeByte((byte) (autoFocus ? 1 : 0));
             out.writeInt(flash);
             out.writeFloat(exposure);
+            out.writeLong(exposureTime);
+            out.writeByte((byte) (autoExposure ? 1 : 0));
             out.writeFloat(focusDepth);
             out.writeFloat(zoom);
             out.writeInt(whiteBalance);
