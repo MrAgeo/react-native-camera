@@ -65,6 +65,8 @@ import java.util.SortedSet;
 
 import org.reactnative.camera.utils.ObjectUtils;
 
+import android.widget.Toast;
+
 
 @SuppressWarnings("MissingPermission")
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
@@ -297,8 +299,11 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     private Rect mInitialCropRegion;
 
+    private Context mContext;
+
     Camera2(Callback callback, PreviewImpl preview, Context context, Handler bgHandler) {
         super(callback, preview, bgHandler);
+        mContext = context;
         mCameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         mCameraManager.registerAvailabilityCallback(new CameraManager.AvailabilityCallback() {
             @Override
@@ -535,6 +540,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                 try {
                     mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                             mCaptureCallback, null);
+                    Toast.makeText(mContext, String.format("Auto Focus: %s", autoFocus ? "On" : "Off"), Toast.LENGTH_SHORT).show();
                 } catch (CameraAccessException e) {
                     mAutoFocus = !mAutoFocus; // Revert
                 }
@@ -589,6 +595,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
+                Toast.makeText(mContext, String.format("EV: %.3f", exposure), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mExposure = saved;  // Revert
             }
@@ -706,6 +713,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
+                Toast.makeText(mContext, String.format("Exposure Time: %.3f ms", exposureTime * 1E-6), Toast.LENGTH_SHORT).show();
 
             } catch (CameraAccessException e) {
                 mExposureTime = saved;
@@ -747,6 +755,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
+                Toast.makeText(mContext, String.format("ISO: %d", iso), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mSensorSensitivity = saved;  // Revert
             }
@@ -791,6 +800,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     @Override
     void takePicture(ReadableMap options) {
+        Toast.makeText(mContext, "Taking picture...", Toast.LENGTH_LONG).show();
         mCaptureCallback.setOptions(options);
 
         if (mAutoFocus) {
@@ -878,6 +888,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
+                Toast.makeText(mContext, String.format("Focus Depth: %.3f", focusDepth), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mFocusDepth = saved;  // Revert
             }
@@ -889,20 +900,21 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     @Override
     public void setZoom(float zoom) {
-      if (mZoom == zoom) {
-          return;
-      }
-      float saved = mZoom;
-      mZoom = zoom;
-      if (mCaptureSession != null) {
-          updateZoom();
-          try {
-              mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
-                  mCaptureCallback, null);
-          } catch (CameraAccessException e) {
-              mZoom = saved;  // Revert
-          }
-      }
+        if (mZoom == zoom) {
+            return;
+        }
+        float saved = mZoom;
+        mZoom = zoom;
+        if (mCaptureSession != null) {
+            updateZoom();
+            try {
+                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
+                    mCaptureCallback, null);
+                Toast.makeText(mContext, String.format("Zoom: %.3f", zoom), Toast.LENGTH_SHORT).show();
+            } catch (CameraAccessException e) {
+                mZoom = saved;  // Revert
+            }
+        }
     }
 
     @Override
