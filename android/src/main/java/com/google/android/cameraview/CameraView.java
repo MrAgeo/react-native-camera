@@ -258,6 +258,7 @@ public class CameraView extends FrameLayout {
         state.focusDepth = getFocusDepth();
         state.zoom = getZoom();
         state.whiteBalance = getWhiteBalance();
+        state.iso = getSensorSensitivity();
         state.playSoundOnCapture = getPlaySoundOnCapture();
         state.playSoundOnRecord = getPlaySoundOnRecord();
         state.scanning = getScanning();
@@ -284,6 +285,7 @@ public class CameraView extends FrameLayout {
         setFocusDepth(ss.focusDepth);
         setZoom(ss.zoom);
         setWhiteBalance(ss.whiteBalance);
+        setSensorSensitivity(ss.iso);
         setPlaySoundOnCapture(ss.playSoundOnCapture);
         setPlaySoundOnRecord(ss.playSoundOnRecord);
         setScanning(ss.scanning);
@@ -589,6 +591,30 @@ public class CameraView extends FrameLayout {
         return mImpl.getExposureTime();
     }
 
+    public void setSensorSensitivity(int iso){
+        mImpl.setSensorSensitivity(iso);
+    }
+
+    public int getSensorSensitivity(){
+        return mImpl.getSensorSensitivity();
+    }
+
+    public boolean isManualISOSupported(){
+        return mImpl.isManualISOSupported();
+    }
+
+    public boolean isManualExposureTimeSupported(){
+        return mImpl.isManualExposureTimeSupported();
+    }
+
+    public boolean isManualFocusSupported(){
+        return mImpl.isManualFocusSupported();
+    }
+
+    public boolean isLegacy(){
+        return mImpl.isLegacy();
+    }
+
 
     /**
      * Gets the camera orientation relative to the devices native orientation.
@@ -810,6 +836,8 @@ public class CameraView extends FrameLayout {
 
         int whiteBalance;
 
+        int iso;
+
         boolean playSoundOnCapture;
 
         boolean playSoundOnRecord;
@@ -832,6 +860,7 @@ public class CameraView extends FrameLayout {
             focusDepth = source.readFloat();
             zoom = source.readFloat();
             whiteBalance = source.readInt();
+            iso = source.readInt();
             playSoundOnCapture = source.readByte() != 0;
             playSoundOnRecord = source.readByte() != 0;
             scanning = source.readByte() != 0;
@@ -856,6 +885,7 @@ public class CameraView extends FrameLayout {
             out.writeFloat(focusDepth);
             out.writeFloat(zoom);
             out.writeInt(whiteBalance);
+            out.writeInt(iso);
             out.writeByte((byte) (playSoundOnCapture ? 1 : 0));
             out.writeByte((byte) (playSoundOnRecord ? 1 : 0));
             out.writeByte((byte) (scanning ? 1 : 0));

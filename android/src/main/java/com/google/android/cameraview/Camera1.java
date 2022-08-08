@@ -120,6 +120,14 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
     private int mFlash;
 
     private float mExposure;
+    private int mMinExposure;
+    private int mMaxExposure;
+    private boolean mIsExposureSupported;
+
+    private int mSensorSensitivity;
+
+    private String[] mSupportedISOValues;
+    private String mISOKeyword = null;
 
     private boolean mAutoExposure;
 
@@ -723,6 +731,40 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
     }
 
     @Override
+    public void setSensorSensitivity(int iso){
+        if (mISOKeyword == null || iso == mSensorSensitivity) {
+            return;
+        }
+        if (setSensorSensitivityInternal(iso)) {
+            try {
+                if(mCamera != null){
+                    mCamera.setParameters(mCameraParameters);
+                }
+            } catch (RuntimeException e) {
+                Log.e("CAMERA_1::", "setParameters failed", e);
+            }
+        }
+    }
+
+    @Override
+    public int getSensorSensitivity() {return mSensorSensitivity;}
+
+    @Override
+    boolean isLegacy() {return true;}
+
+    @Override
+    boolean isManualISOSupported() {return mISOKeyword != null;}
+
+    @Override
+    boolean isManualExposureTimeSupported() {return false;}
+
+    @Override
+    boolean isManualFocusSupported() {return false;}
+
+    @Override
+    boolean isExposureSupported() {return mIsExposureSupported;}
+
+    @Override
     void setScanning(boolean isScanning) {
         if (isScanning == mIsScanning) {
             return;
@@ -1098,6 +1140,48 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
             mCamera = Camera.open(mCameraId);
             mCameraParameters = mCamera.getParameters();
 
+
+
+            mMinExposure = mCameraParameters.getMinExposureCompensation();
+            mMaxExposure = mCameraParameters.getMaxExposureCompensation();
+            mIsExposureSupported = mMinExposure != mMaxExposure;
+
+            // Search iso keyword value... -_-
+            String flat = mCameraParameters.flatten();
+            String values_keyword = null;
+            if(flat.contains("iso-values")) {
+                // most used keywords
+                values_keyword="iso-values";
+                mISOKeyword="iso";
+            } else if(flat.contains("iso-mode-values")) {
+                // google galaxy nexus keywords
+                values_keyword="iso-mode-values";
+                mISOKeyword="iso";
+            } else if(flat.contains("iso-speed-values")) {
+                // micromax a101 keywords
+                values_keyword="iso-speed-values";
+                mISOKeyword="iso-speed";
+            } else if(flat.contains("nv-picture-iso-values")) {
+                // LG dual p990 keywords
+                values_keyword="nv-picture-iso-values";
+                mISOKeyword="nv-picture-iso";
+            }
+            // add other eventual keywords here...
+            if(mISOKeyword != null) {
+                // flatten contains the iso key!!
+                String isoValues = flat.substring(flat.indexOf(values_keyword));
+                isoValues = isoValues.substring(isoValues.indexOf("=") + 1);
+
+                if(isoValues.contains(";"))
+                    isoValues = isoValues.substring(0, isoValues.indexOf(";"));
+
+                mSupportedISOValues = isoValues.split(",");
+
+            } else {
+                // iso not supported in a known way
+                mSensorSensitivity = 0; // set to default value
+            }
+
             // Supported preview sizes
             mPreviewSizes.clear();
             for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {
@@ -1208,6 +1292,7 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
         setAutoFocusInternal(mAutoFocus);
         setFlashInternal(mFlash);
         setExposureInternal(mExposure);
+        setSensorSensitivity(mSensorSensitivity);
         setAspectRatio(mAspectRatio);
         setZoomInternal(mZoom);
         setWhiteBalanceInternal(mWhiteBalance);
@@ -1506,13 +1591,10 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
     private boolean setExposureInternal(float exposure) {
         mExposure = exposure;
         if (isCameraOpened()){
-            int minExposure = mCameraParameters.getMinExposureCompensation();
-            int maxExposure = mCameraParameters.getMaxExposureCompensation();
-
-            if (minExposure != maxExposure) {
+            if (mIsExposureSupported) {
                 int scaledValue = 0;
                 if (mExposure >= 0 && mExposure <= 1) {
-                    scaledValue = (int) (mExposure * (maxExposure - minExposure)) + minExposure;
+                    scaledValue = (int) (mExposure * (mMaxExposure - mMinExposure)) + mMinExposure;
                 }
 
                 mCameraParameters.setExposureCompensation(scaledValue);
@@ -1533,6 +1615,35 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
         }
     }
 
+
+    /**
+     * @return {@code true} if {@link #mCameraParameters} was modified.
+     */
+    private boolean setSensorSensitivityInternal(int iso){
+        if (isCameraOpened()){
+            String newISO = String.valueOf(iso);
+            if (Arrays.asList(mSupportedISOValues).contains(newISO)){
+                mSensorSensitivity = iso;
+            } else {
+                // Search closest value
+                float diff = Float.POSITIVE_INFINITY;
+                for (String val : mSupportedISOValues){
+                    int intVal = Integer.parseInt(val);
+                    int d = Math.abs(iso - intVal);
+                    if (d < diff) {
+                        diff = d;
+                        newISO = val;
+                        mSensorSensitivity = intVal;
+                    }
+                }
+            }
+            mCameraParameters.set(mISOKeyword, newISO);
+            return true;
+        }else{
+            return false;
+        }
+    }
+
     /**
      * @return {@code true} if {@link #mCameraParameters} was modified.
      */
@@ -1544,7 +1655,6 @@ class Camera1 extends CameraViewImpl implements MediaRecorder.OnInfoListener,
             mZoom = zoom;
             return true;
         } else {
-            mZoom = zoom;
             return false;
         }
     }

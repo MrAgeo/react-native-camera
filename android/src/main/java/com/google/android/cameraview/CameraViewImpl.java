@@ -62,7 +62,7 @@ abstract class CameraViewImpl {
     abstract boolean isCameraOpened();
 
     abstract void setFacing(int facing);
-  
+
     abstract int getFacing();
 
     abstract void setCameraId(String id);
@@ -85,6 +85,20 @@ abstract class CameraViewImpl {
     abstract boolean setAspectRatio(AspectRatio ratio);
 
     abstract AspectRatio getAspectRatio();
+
+    abstract boolean isLegacy();
+
+    abstract boolean isManualISOSupported();
+
+    abstract boolean isManualExposureTimeSupported();
+
+    abstract boolean isManualFocusSupported();
+
+    abstract boolean isExposureSupported();
+
+    abstract void setSensorSensitivity(int iso);
+
+    abstract int getSensorSensitivity();
 
     abstract void setAutoFocus(boolean autoFocus);
 

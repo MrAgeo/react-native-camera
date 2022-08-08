@@ -141,6 +141,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             updateFlash();
             updateFocusDepth();
             updateWhiteBalance();
+            updateSensorSensitivity();
             updateZoom();
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
@@ -219,6 +220,8 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     private CameraCharacteristics mCameraCharacteristics;
 
+    private boolean mSupportsManualParams;
+
     CameraDevice mCamera;
 
     MediaActionSound sound = new MediaActionSound();
@@ -256,21 +259,29 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     private boolean mAutoFocus;
     private boolean mAutoFocusPrevious;
 
+    private float mFocusDepth;
+
     private int mFlash;
 
+    private boolean mAutoExposure;
+
     private float mExposure;
+    private Rational mExposureStep;
+    private Range<Integer> mExposureRange;
+    private float mExposureTotalSteps;
+    private boolean mIsExposureSupported;
 
     private long mExposureTime;
+    private Range<Long> mExposureTimeRange;
 
-    private boolean mAutoExposure;
+    private int mSensorSensitivity;
+    private Range<Integer> mSensorSensitivityRange;
 
     private int mCameraOrientation;
 
     private int mDisplayOrientation;
 
     private int mDeviceOrientation;
-
-    private float mFocusDepth;
 
     private float mZoom;
 
@@ -568,7 +579,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     @Override
     void setExposureCompensation(float exposure) {
-        //Log.e("CAMERA_2:: ", "Adjusting exposure is not currently supported for Camera2");
         if (mExposure == exposure) {
             return;
         }
@@ -609,73 +619,42 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         return mAutoExposure;
     }
 
-    void updateExposureCompensation(){
 
-        if (mAutoExposure) {
+    /**
+     * Updates the internal state of exposure-compensation to {@link #mExposure}.
+     */
+    void updateExposureCompensation(){
+        if (!(mIsExposureSupported && mAutoExposure)) {
             return;
         }
-        Rational step = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
-        Range<Integer> range = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+        // Map from 0-1 to step count
+        int value = (int) (mExposure * mExposureTotalSteps);
 
-
-        if (step == null) {
-            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_STEP null");
-        }
-
-        if (range == null){
-            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_RANGE null");
-        }
-
-        int minRange = range.getLower();
-        int maxRange = range.getUpper();
-
-        // Check if exposure compensation is supported
-        if ( minRange != 0 || maxRange != 0) {
-
-            // Get total steps from minRange to maxRange
-            float steps = (maxRange - minRange)/step.floatValue();
-
-            // Map 0-1 to step count
-            int value = (int) (mExposure * steps);
-            
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value);
-        }
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value);
     }
 
+
     private void lockExposure(){
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
         try {
             mCaptureCallback.setState(PictureCaptureCallback.STATE_LOCKING);
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, null);
+            mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback, null);
         } catch (CameraAccessException e) {
             Log.e(TAG, "Failed to lock exposure compensation.", e);
         }
     }
 
     /**
-     * Unlocks the auto-exposure and restart camera preview. This is supposed to be called after
-     * capturing a still picture.
+     * Unlocks the auto-exposure
      */
     void unlockExposure() {
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
         try {
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, null);
-            updateAutoExposure();
-            updateFlash();
-            if (mIsScanning) {
-                mImageFormat = ImageFormat.YUV_420_888;
-                startCaptureSession();
-            } else {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                        CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
                         null);
                 mCaptureCallback.setState(PictureCaptureCallback.STATE_PREVIEW);
-            }
         } catch (CameraAccessException e) {
-            Log.e(TAG, "Failed to restart camera preview.", e);
+            Log.e(TAG, "Failed to unlock exposure compensation.", e);
         }
     }
 
@@ -696,19 +675,27 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                         CaptureRequest.CONTROL_AE_MODE_ON);
             }
-            // If auto-exposure is set, deactivate auto-focus and save its state
+            // If auto-exposure is set, save the state of auto-focus and deactivate it
             mAutoFocusPrevious = mAutoFocus;
-            setAutoFocus(false);
+
+            if (mAutoFocus){
+                mAutoFocus = false;
+                updateAutoFocus();
+            }
+
         } else {
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                     CaptureRequest.CONTROL_AE_MODE_OFF);
             setAutoFocus(mAutoFocusPrevious);
+            updateSensorSensitivity();
+            updateExposureTime();
+            //updateFrameRate(); // not implemented yet
         }
     }
 
     @Override
     void setExposureTime(long exposureTime){
-        if(mExposureTime == exposureTime){
+        if (!mSupportsManualParams || mExposureTime == exposureTime){
             return;
         }
         long saved = mExposureTime;
@@ -716,7 +703,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
         if (mCaptureSession != null) {
             updateExposureTime();
-
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
@@ -730,16 +716,16 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     @Override
     long getExposureTime() {return mExposureTime;}
 
+    /**
+     * Updates the internal state of exposure-time to {@link #mExposureTime}.
+     */
     void updateExposureTime(){
-        if (mAutoExposure){
+        if (!mSupportsManualParams || mAutoExposure){
             return;
         }
-        Range<Long> timeRange = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
-        if (timeRange == null){
-            throw new NullPointerException("Unexpected state: SENSOR_INFO_EXPOSURE_TIME_RANGE null");
-        }
-        long minTime = timeRange.getLower();
-        long maxTime = timeRange.getUpper();
+
+        long minTime = mExposureTimeRange.getLower();
+        long maxTime = mExposureTimeRange.getUpper();
         if (mExposureTime > maxTime){
             mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, maxTime);
         } else if (mExposureTime < minTime ){
@@ -749,7 +735,60 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
     }
 
-    // TODO: Confirm PNG output
+    @Override
+    void setSensorSensitivity(int iso){
+        if (!mSupportsManualParams || mSensorSensitivity == iso) {
+            return;
+        }
+        int saved = mSensorSensitivity;
+        mSensorSensitivity = iso;
+        if (mCaptureSession != null) {
+            updateSensorSensitivity();
+            try {
+                mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
+                        mCaptureCallback, null);
+            } catch (CameraAccessException e) {
+                mSensorSensitivity = saved;  // Revert
+            }
+        }
+    }
+
+    @Override
+    int getSensorSensitivity(){return mSensorSensitivity;}
+
+    // SJT
+    void updateSensorSensitivity(){
+        if (!mSupportsManualParams || mAutoExposure){
+            return;
+        }
+
+        int minISO = mSensorSensitivityRange.getLower();
+        int maxISO = mSensorSensitivityRange.getUpper();
+
+        if (mSensorSensitivity > maxISO){
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, maxISO);
+        } else if (mSensorSensitivity < minISO ){
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, minISO);
+        } else {
+            mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, mSensorSensitivity);
+        }
+    }
+
+    @Override
+    boolean isLegacy() {return false;}
+
+    @Override
+    boolean isManualISOSupported() {return mSupportsManualParams;}
+
+    @Override
+    boolean isManualExposureTimeSupported() {return mSupportsManualParams;}
+
+    @Override
+    boolean isManualFocusSupported() {return true;}
+
+    @Override
+    boolean isExposureSupported() {return mIsExposureSupported;}
+
     @Override
     void takePicture(ReadableMap options) {
         mCaptureCallback.setOptions(options);
@@ -846,9 +885,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     }
 
     @Override
-    float getFocusDepth() {
-        return mFocusDepth;
-    }
+    float getFocusDepth() {return mFocusDepth;}
 
     @Override
     public void setZoom(float zoom) {
@@ -984,6 +1021,30 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
     }
 
+    // Returns true if the device supports the required hardware level, or better.
+    boolean isHardwareLevelSupported(int requiredLevel) {
+        final int[] sortedHwLevels = {
+            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY,
+            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL,
+            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
+            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL,
+            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3
+        };
+        int deviceLevel = mCameraCharacteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+        if (requiredLevel == deviceLevel) {
+            return true;
+        }
+
+        for (int sortedlevel : sortedHwLevels) {
+            if (sortedlevel == requiredLevel) {
+                return true;
+            } else if (sortedlevel == deviceLevel) {
+                return false;
+            }
+        }
+        return false; // Should never reach here
+    }
+
     /**
      * <p>Chooses a camera ID by the specified camera facing ({@link #mFacing}).</p>
      * <p>This rewrites {@link #mCameraId}, {@link #mCameraCharacteristics}, and optionally
@@ -1069,7 +1130,10 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     /**
      * <p>Collects some information from {@link #mCameraCharacteristics}.</p>
      * <p>This rewrites {@link #mPreviewSizes}, {@link #mPictureSizes},
-     * {@link #mCameraOrientation}, and optionally, {@link #mAspectRatio}.</p>
+     * {@link #mSupportsManualParams}, {@link #mIsExposureSupported},
+     * {@link #mExposureStep}, {@link #mExposureTotalSteps}, {@link #mExposureRange}
+     * {@link #mCameraOrientation}, and optionally, {@link #mAspectRatio},
+     * {@link #mExposureTimeRange}.</p>
      */
     private void collectCameraInfo() {
         StreamConfigurationMap map = mCameraCharacteristics.get(
@@ -1101,6 +1165,36 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
 
         mCameraOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+
+        mSupportsManualParams = isHardwareLevelSupported(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL);
+        // SJT - Set ISO-Ranges & supportsXYZ
+
+        mExposureRange = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+        mExposureStep = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+        if (mExposureStep == null) {
+            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_STEP null");
+        }
+        if (mExposureRange == null){
+            throw new NullPointerException("Unexpected state: CONTROL_AE_COMPENSATION_RANGE null");
+        }
+        int minRange = mExposureRange.getLower();
+        int maxRange = mExposureRange.getUpper();
+        mExposureTotalSteps = (maxRange - minRange)/mExposureStep.floatValue();
+        mIsExposureSupported = minRange != 0 || maxRange != 0;
+
+        if (mSupportsManualParams){
+            mExposureTimeRange = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            if (mExposureTimeRange == null){
+                throw new NullPointerException("Unexpected state: SENSOR_INFO_EXPOSURE_TIME_RANGE null");
+            }
+
+
+            mSensorSensitivityRange = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            if (mSensorSensitivityRange == null){
+                throw new NullPointerException("Unexpected state: SENSOR_INFO_SENSITIVITY_RANGE null");
+            }
+        }
+
     }
 
     protected void collectPictureSizes(SizeMap sizes, StreamConfigurationMap map) {
@@ -1265,6 +1359,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         } else {
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_OFF);
+            updateFocusDepth();
         }
     }
 
@@ -1274,8 +1369,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     void updateFlash() {
         switch (mFlash) {
             case Constants.FLASH_OFF:
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                        CaptureRequest.CONTROL_AE_MODE_ON);
+                // mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                //         CaptureRequest.CONTROL_AE_MODE_ON);
+                updateAutoExposure();
                 mPreviewRequestBuilder.set(CaptureRequest.FLASH_MODE,
                         CaptureRequest.FLASH_MODE_OFF);
                 break;
