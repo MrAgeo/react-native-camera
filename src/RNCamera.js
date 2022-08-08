@@ -271,6 +271,7 @@ type PropsType = typeof View.props & {
   exposure?: number,
   exposureTime?: number,
   autoExposure?: boolean,
+  iso?: number,
   barCodeTypes?: Array<string>,
   googleVisionBarcodeType?: number,
   googleVisionBarcodeMode?: number,
@@ -392,6 +393,7 @@ export default class Camera extends React.Component<PropsType, StateType> {
     autoExposure: CameraManager.AutoExposure,
     autoFocus: CameraManager.AutoFocus,
     whiteBalance: CameraManager.WhiteBalance,
+    iso: CameraManager.SensorSensitivity,
     faceDetectionMode: (CameraManager.FaceDetection || {}).Mode,
     faceDetectionLandmarks: (CameraManager.FaceDetection || {}).Landmarks,
     faceDetectionClassifications: (CameraManager.FaceDetection || {}).Classifications,
@@ -435,6 +437,7 @@ export default class Camera extends React.Component<PropsType, StateType> {
     flashMode: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     exposure: PropTypes.number,
     exposureTime: PropTypes.number,
+    iso: PropTypes.number,
     autoExposure: PropTypes.bool,
     whiteBalance: PropTypes.oneOfType([PropTypes.string, PropTypes.number,
       PropTypes.shape({ temperature: PropTypes.number, tint: PropTypes.number,
@@ -475,6 +478,7 @@ export default class Camera extends React.Component<PropsType, StateType> {
     autoExposure: true,
     exposureTime: 0,
     whiteBalance: CameraManager.WhiteBalance.auto,
+    iso: -1,
     faceDetectionMode: (CameraManager.FaceDetection || {}).fast,
     barCodeTypes: Object.values(CameraManager.BarCodeType),
     googleVisionBarcodeType: ((CameraManager.GoogleVisionBarcodeDetection || {}).BarcodeType || {})
@@ -661,6 +665,22 @@ export default class Camera extends React.Component<PropsType, StateType> {
 
   isRecording() {
     return CameraManager.isRecording(this._cameraHandle);
+  }
+
+  async isManualISOSupported() {
+    return await CameraManager.isManualISOSupported(this._cameraHandle);
+  }
+
+  async isManualExposureTimeSupported() {
+    return await CameraManager.isManualExposureTimeSupported(this._cameraHandle);
+  }
+
+  async isManualFocusSupported() {
+    return await CameraManager.isManualFocusSupported(this._cameraHandle);
+  }
+
+  async isLegacy() {
+    return await CameraManager.isLegacy(this._cameraHandle);
   }
 
   resumePreview() {

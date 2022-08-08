@@ -135,9 +135,15 @@ public class CameraViewManager extends ViewGroupManager<RNCameraView> {
   public void setUseNativeZoom(RNCameraView view, boolean useNativeZoom) {
     view.setUseNativeZoom(useNativeZoom);
   }
+  
   @ReactProp(name = "whiteBalance")
   public void setWhiteBalance(RNCameraView view, int whiteBalance) {
     view.setWhiteBalance(whiteBalance);
+  }
+  
+  @ReactProp(name = "iso")
+  public void setSensorSensitivity(RNCameraView view, int iso) {
+    view.setSensorSensitivity(iso);
   }
 
   @ReactProp(name = "pictureSize")
