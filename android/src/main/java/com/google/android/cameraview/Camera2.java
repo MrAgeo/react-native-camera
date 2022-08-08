@@ -614,6 +614,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                 try {
                     mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                             mCaptureCallback, null);
+                    Toast.makeText(mContext, String.format("Auto Exposure: %s", autoExposure ? "On" : "Off"), Toast.LENGTH_SHORT).show();
                 } catch (CameraAccessException e) {
                     mAutoExposure = !mAutoExposure; // Revert
                 }
