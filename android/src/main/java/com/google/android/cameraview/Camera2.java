@@ -65,7 +65,7 @@ import java.util.SortedSet;
 
 import org.reactnative.camera.utils.ObjectUtils;
 
-import android.widget.Toast;
+// import android.widget.Toast;
 
 
 @SuppressWarnings("MissingPermission")
@@ -173,6 +173,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
         @Override
         public void onPrecaptureRequired() {
+            // Toast.makeText(mContext,"Precapture required", Toast.LENGTH_SHORT).show();
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
                     CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
             setState(STATE_PRECAPTURE);
@@ -187,6 +188,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
         @Override
         public void onReady() {
+            // Toast.makeText(mContext,"OnReady", Toast.LENGTH_SHORT).show();
             captureStillPicture();
         }
 
@@ -266,6 +268,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     private int mFlash;
 
     private boolean mAutoExposure;
+    private boolean mIsAutoExposureSupported;
 
     private float mExposure;
     private Rational mExposureStep;
@@ -540,7 +543,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                 try {
                     mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                             mCaptureCallback, null);
-                    Toast.makeText(mContext, String.format("Auto Focus: %s", autoFocus ? "On" : "Off"), Toast.LENGTH_SHORT).show();
+                    // Toast.makeText(mContext, String.format("Auto Focus: %s", autoFocus ? "On" : "Off"), Toast.LENGTH_SHORT).show();
                 } catch (CameraAccessException e) {
                     mAutoFocus = !mAutoFocus; // Revert
                 }
@@ -595,7 +598,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
-                Toast.makeText(mContext, String.format("EV: %.3f", exposure), Toast.LENGTH_SHORT).show();
+                // Toast.makeText(mContext, String.format("EV: %.3f", exposure), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mExposure = saved;  // Revert
             }
@@ -609,14 +612,20 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         }
         mAutoExposure = autoExposure;
         if (mPreviewRequestBuilder != null) {
-            updateAutoExposure();
             if (mCaptureSession != null) {
+                updateAutoExposure();
                 try {
                     mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                             mCaptureCallback, null);
-                    Toast.makeText(mContext, String.format("Auto Exposure: %s", autoExposure ? "On" : "Off"), Toast.LENGTH_SHORT).show();
+                    // Toast.makeText(mContext, String.format("Auto Exposure: %s", autoExposure ? "On" : "Off"), Toast.LENGTH_SHORT).show();
                 } catch (CameraAccessException e) {
                     mAutoExposure = !mAutoExposure; // Revert
+                }
+
+                if (mAutoExposure) {
+                    unlockExposure();
+                } else {
+                    lockExposure();
                 }
             }
         }
@@ -643,11 +652,13 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
 
     private void lockExposure(){
+        // Toast.makeText(mContext, "Locking Exposure", Toast.LENGTH_SHORT).show();
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
         try {
-            mCaptureCallback.setState(PictureCaptureCallback.STATE_LOCKING);
             mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback, null);
+            // Toast.makeText(mContext, "Exposure locked", Toast.LENGTH_SHORT).show();
         } catch (CameraAccessException e) {
+            // Toast.makeText(mContext, "Unable to unlock Exposure", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Failed to lock exposure compensation.", e);
         }
     }
@@ -656,12 +667,14 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * Unlocks the auto-exposure
      */
     void unlockExposure() {
+        // Toast.makeText(mContext, "Unlocking Exposure", Toast.LENGTH_SHORT).show();
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
         try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
                         null);
-                mCaptureCallback.setState(PictureCaptureCallback.STATE_PREVIEW);
+                // Toast.makeText(mContext, "Exposure unlocked", Toast.LENGTH_SHORT).show();
         } catch (CameraAccessException e) {
+            // Toast.makeText(mContext, "Failed to unlock Exposure", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Failed to unlock exposure compensation.", e);
         }
     }
@@ -671,17 +684,13 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      */
     void updateAutoExposure() {
         if (mAutoExposure) {
-            int[] modes = mCameraCharacteristics.get(
-                    CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
-            // Auto exposure is not supported
-            if (modes == null || modes.length == 0 ||
-                    (modes.length == 1 && modes[0] == CameraCharacteristics.CONTROL_AE_MODE_OFF)) {
+            if (mIsAutoExposureSupported) {
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON);
+            } else {
                 mAutoExposure = false;
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                         CaptureRequest.CONTROL_AE_MODE_OFF);
-            } else {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                        CaptureRequest.CONTROL_AE_MODE_ON);
             }
             // If auto-exposure is set, save the state of auto-focus and deactivate it
             mAutoFocusPrevious = mAutoFocus;
@@ -690,7 +699,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                 mAutoFocus = false;
                 updateAutoFocus();
             }
-
         } else {
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                     CaptureRequest.CONTROL_AE_MODE_OFF);
@@ -714,7 +722,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
-                Toast.makeText(mContext, String.format("Exposure Time: %.3f ms", exposureTime * 1E-6), Toast.LENGTH_SHORT).show();
+                // Toast.makeText(mContext, String.format("Exposure Time: %.3f ms", exposureTime * 1E-6), Toast.LENGTH_SHORT).show();
 
             } catch (CameraAccessException e) {
                 mExposureTime = saved;
@@ -756,7 +764,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
-                Toast.makeText(mContext, String.format("ISO: %d", iso), Toast.LENGTH_SHORT).show();
+                // Toast.makeText(mContext, String.format("ISO: %d", iso), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mSensorSensitivity = saved;  // Revert
             }
@@ -801,13 +809,11 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
 
     @Override
     void takePicture(ReadableMap options) {
-        Toast.makeText(mContext, "Taking picture...", Toast.LENGTH_LONG).show();
+        // Toast.makeText(mContext, "Taking picture...", Toast.LENGTH_LONG).show();
         mCaptureCallback.setOptions(options);
 
         if (mAutoFocus) {
             lockFocus();
-        } else if (mAutoExposure) {
-            lockExposure();
         } else {
             captureStillPicture();
         }
@@ -889,7 +895,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                         mCaptureCallback, null);
-                Toast.makeText(mContext, String.format("Focus Depth: %.3f", focusDepth), Toast.LENGTH_SHORT).show();
+                // Toast.makeText(mContext, String.format("Focus Depth: %.3f", focusDepth), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mFocusDepth = saved;  // Revert
             }
@@ -911,7 +917,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             try {
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(),
                     mCaptureCallback, null);
-                Toast.makeText(mContext, String.format("Zoom: %.3f", zoom), Toast.LENGTH_SHORT).show();
+                // Toast.makeText(mContext, String.format("Zoom: %.3f", zoom), Toast.LENGTH_SHORT).show();
             } catch (CameraAccessException e) {
                 mZoom = saved;  // Revert
             }
@@ -1180,8 +1186,11 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         mCameraOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
         mSupportsManualParams = isHardwareLevelSupported(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL);
-        // SJT - Set ISO-Ranges & supportsXYZ
 
+        int[] modes = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
+
+        mIsAutoExposureSupported = !(modes == null || modes.length == 0 ||
+        (modes.length == 1 && modes[0] == CameraCharacteristics.CONTROL_AE_MODE_OFF));
         mExposureRange = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
         mExposureStep = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
         if (mExposureStep == null) {
@@ -1256,6 +1265,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         if (!isCameraOpened() || !mPreview.isReady() || mStillImageReader == null || mScanImageReader == null) {
             return;
         }
+        // Toast.makeText(mContext, "Starting capture session", Toast.LENGTH_SHORT).show();
         Size previewSize = chooseOptimalSize();
         mPreview.setBufferSize(previewSize.getWidth(), previewSize.getHeight());
         Surface surface = getPreviewSurface();
@@ -1277,7 +1287,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
     @Override
     public void resumePreview() {
         unlockFocus();
-        unlockExposure();
     }
 
     @Override
@@ -1510,12 +1519,15 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * Locks the focus as the first step for a still image capture.
      */
     private void lockFocus() {
+        // Toast.makeText(mContext, "Locking Focus...", Toast.LENGTH_SHORT).show();
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                 CaptureRequest.CONTROL_AF_TRIGGER_START);
         try {
             mCaptureCallback.setState(PictureCaptureCallback.STATE_LOCKING);
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, null);
+            // Toast.makeText(mContext, "Focus Locked", Toast.LENGTH_SHORT).show();
         } catch (CameraAccessException e) {
+            // Toast.makeText(mContext, "Unable to lock focus", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Failed to lock focus.", e);
         }
     }
@@ -1607,6 +1619,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * Captures a still picture.
      */
     void captureStillPicture() {
+        // Toast.makeText(mContext, "Capturing Still Picture", Toast.LENGTH_SHORT).show();
+
+        // Create just 1-frame CaptureRequest to prepare still image capture
         try {
             CaptureRequest.Builder captureRequestBuilder = mCamera.createCaptureRequest(
                     CameraDevice.TEMPLATE_STILL_CAPTURE);
@@ -1617,32 +1632,53 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
             captureRequestBuilder.addTarget(mStillImageReader.getSurface());
             captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                     mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AF_MODE));
-            switch (mFlash) {
-                case Constants.FLASH_OFF:
-                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                            CaptureRequest.CONTROL_AE_MODE_ON);
-                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
-                            CaptureRequest.FLASH_MODE_OFF);
-                    break;
-                case Constants.FLASH_ON:
-                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                            CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
-                    break;
-                case Constants.FLASH_TORCH:
-                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                            CaptureRequest.CONTROL_AE_MODE_ON);
-                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
-                            CaptureRequest.FLASH_MODE_TORCH);
-                    break;
-                case Constants.FLASH_AUTO:
-                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                            CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
-                    break;
-                case Constants.FLASH_RED_EYE:
-                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                            CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
-                    break;
+
+            if (mIsAutoExposureSupported){
+                // "Override" AE mode & AE lock in mPreviewRequestBuilder if Flash is ON
+
+                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK,
+                        mFlash == Constants.FLASH_OFF ?
+                            mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_LOCK) : false);
+
+                switch (mFlash) {
+                    case Constants.FLASH_OFF:
+                        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                // CaptureRequest.CONTROL_AE_MODE_ON);
+                                mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_MODE));
+
+                        captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,
+                                mPreviewRequestBuilder.get(CaptureRequest.SENSOR_SENSITIVITY));
+
+                        captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,
+                                mPreviewRequestBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME));
+
+                        captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
+                                CaptureRequest.FLASH_MODE_OFF);
+                        break;
+                    case Constants.FLASH_ON:
+                        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+                        break;
+                    case Constants.FLASH_TORCH:
+                        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON);
+
+                        captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
+                                CaptureRequest.FLASH_MODE_TORCH);
+                        break;
+                    case Constants.FLASH_AUTO:
+                        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+                        break;
+                    case Constants.FLASH_RED_EYE:
+                        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH_REDEYE);
+                        break;
+                }
+            } else {
+                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
             }
+
             captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOutputRotation());
 
 
@@ -1663,7 +1699,6 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                             if (mCaptureCallback.getOptions().hasKey("pauseAfterCapture")
                               && !mCaptureCallback.getOptions().getBoolean("pauseAfterCapture")) {
                                 unlockFocus();
-                                unlockExposure();
                             }
                             if (mPlaySoundOnCapture) {
                                 sound.play(MediaActionSound.SHUTTER_CLICK);
@@ -1671,6 +1706,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                         }
                     }, null);
         } catch (CameraAccessException e) {
+            // Toast.makeText(mContext, "Unable to capture still picture", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Cannot capture a still picture.", e);
         }
     }
@@ -1789,6 +1825,7 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
      * capturing a still picture.
      */
     void unlockFocus() {
+        // Toast.makeText(mContext, "Unlocking Focus", Toast.LENGTH_SHORT).show();
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                 CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
         try {
@@ -1805,7 +1842,9 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
                         null);
                 mCaptureCallback.setState(PictureCaptureCallback.STATE_PREVIEW);
             }
+            // Toast.makeText(mContext, "Focus unlocked", Toast.LENGTH_SHORT).show();
         } catch (CameraAccessException e) {
+            // Toast.makeText(mContext, "Unable to unlock Focus", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "Failed to restart camera preview.", e);
         }
     }
@@ -1869,6 +1908,10 @@ class Camera2 extends CameraViewImpl implements MediaRecorder.OnInfoListener, Me
         private void process(@NonNull CaptureResult result) {
             switch (mState) {
                 case STATE_LOCKING: {
+                    // Exit if AF is null or not LOCKED;
+                    // Else:
+                    //     Call OnReady() if AE is CONVERGED or null;
+                    //     Else: Call onPrecaptureRequired();
                     Integer af = result.get(CaptureResult.CONTROL_AF_STATE);
                     if (af == null) {
                         break;
